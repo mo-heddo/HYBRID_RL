@@ -6,33 +6,26 @@ class SudokuCurriculum:
 
     def __init__(self, puzzles, solutions):
 
-        self.puzzles = puzzles
-        self.solutions = solutions
+        self.puzzles = np.array(puzzles)
+        self.solutions = np.array(solutions)
 
         # Count empty cells in every puzzle
         self.empty_counts = np.sum(
-            puzzles == 0,
+            self.puzzles == 0,
             axis=(1, 2)
         )
 
-        # Five difficulty levels
-        self.levels = [
-            (1, 1),
-            (2, 10),
-            (11, 30),
-            (31, 50),
-            (51, 81)
-        ]
+        # Exact difficulty levels in generated_curriculum.csv
+        self.levels = [5, 15, 25, 35, 45]
 
         self.current_level = 0
 
     def get_puzzles(self):
 
-        min_empty, max_empty = self.levels[self.current_level]
+        target_empty = self.levels[self.current_level]
 
         indices = np.where(
-            (self.empty_counts >= min_empty) &
-            (self.empty_counts <= max_empty)
+            self.empty_counts == target_empty
         )[0]
 
         return (
@@ -43,10 +36,17 @@ class SudokuCurriculum:
     def advance_level(self):
 
         if self.current_level < len(self.levels) - 1:
-
             self.current_level += 1
 
-        print(
-            f"Curriculum advanced to level "
-            f"{self.current_level + 1}"
-        )
+            print(
+                f"Curriculum advanced to level "
+                f"{self.current_level + 1}"
+            )
+        else:
+            print("Curriculum completed!")
+
+    def get_current_level(self):
+        return self.current_level + 1
+
+    def is_last_level(self):
+        return self.current_level == len(self.levels) - 1

@@ -2,7 +2,6 @@
 import sys
 from pathlib import Path
 
-# Add project root to Python path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
@@ -12,11 +11,8 @@ from enviroment.sudoku_env import SudokuEnv
 from algorithms.dqn_agent import DQNAgent
 
 
-# ---------------------------------------
-# 1. Load Sudoku Dataset
-# ---------------------------------------
-
-df = pd.read_csv("dataset/sudoku.csv").head(100)
+# 1. Load original training dataset
+df = pd.read_csv("dataset/sudoku.csv", nrows=100)
 
 puzzles = np.array([
     np.array(list(map(int, p))).reshape(9, 9)
@@ -29,10 +25,7 @@ solutions = np.array([
 ])
 
 
-# ---------------------------------------
-# 2. Create Environment
-# ---------------------------------------
-
+# 2. Create Sudoku environment
 env = SudokuEnv(
     puzzles=puzzles,
     solutions=solutions,
@@ -40,10 +33,7 @@ env = SudokuEnv(
 )
 
 
-# ---------------------------------------
-# 3. Create DQN Agent
-# ---------------------------------------
-
+# 3. Create DQN agent
 agent = DQNAgent(
     state_size=83,
     action_size=9,
@@ -58,16 +48,11 @@ agent = DQNAgent(
 )
 
 
-# ---------------------------------------
-# 4. Convert Sudoku Board to State
-# ---------------------------------------
-
+# 4. State encoding
 def encode_state(board, current_cell):
 
-    # Flatten 9x9 board into 81 values
     board_features = board.flatten() / 9.0
 
-    # Encode selected cell coordinates
     if current_cell is None:
         row, col = 0, 0
     else:
@@ -76,7 +61,6 @@ def encode_state(board, current_cell):
     row = row / 8.0
     col = col / 8.0
 
-    # Combine all features
     state = np.concatenate([
         board_features,
         [row, col]
@@ -85,20 +69,14 @@ def encode_state(board, current_cell):
     return state.astype(np.float32)
 
 
-# ---------------------------------------
-# 5. Training Configuration
-# ---------------------------------------
-
+# 5. Training configuration
 episodes = 1000
 
 episode_rewards = []
 episode_losses = []
 
 
-# ---------------------------------------
-# 6. Training Loop
-# ---------------------------------------
-
+# 6. Training loop
 for episode in range(episodes):
 
     observation, info = env.reset()
@@ -118,18 +96,15 @@ for episode in range(episodes):
 
     while not (terminated or truncated):
 
-        # Select action using DQN and action masking
         action = agent.select_action(
             state,
             action_mask
         )
 
-        # Execute action in Sudoku environment
         next_observation, reward, terminated, truncated, next_info = (
             env.step(action)
         )
 
-        # Encode next state
         next_state = encode_state(
             next_observation,
             next_info["current_cell"]
@@ -137,7 +112,6 @@ for episode in range(episodes):
 
         next_action_mask = next_info["action_mask"]
 
-        # Store experience
         agent.remember(
             state,
             action,
@@ -147,31 +121,24 @@ for episode in range(episodes):
             next_action_mask
         )
 
-        # Train DQN
         loss = agent.train_step()
 
         if loss is not None:
             losses.append(loss)
 
-        # Move to next state
         state = next_state
         action_mask = next_action_mask
 
         total_reward += reward
 
-    # Reduce exploration after each episode
+    # Decay exploration
     agent.decay_epsilon()
 
-    # Record performance
     episode_rewards.append(total_reward)
 
-    average_loss = (
-        np.mean(losses) if losses else 0.0
-    )
-
+    average_loss = np.mean(losses) if losses else 0.0
     episode_losses.append(average_loss)
 
-    # Print progress
     if (episode + 1) % 10 == 0:
 
         avg_reward = np.mean(episode_rewards[-10:])
@@ -185,13 +152,10 @@ for episode in range(episodes):
         )
 
 
-# ---------------------------------------
-# 7. Save Trained Model
-# ---------------------------------------
-
+# 7. Save original hybrid model
 Path("models").mkdir(exist_ok=True)
 
 agent.save("models/sudoku_dqn.pth")
 
-print("\nTraining completed!")
+print("\nOriginal hybrid training completed!")
 print("Model saved to models/sudoku_dqn.pth")
