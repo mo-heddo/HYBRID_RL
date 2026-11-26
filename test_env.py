@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from importlib import import_module
 
-from environment.sudoku_env import SudokuEnv
+from enviroment.sudoku_env import SudokuEnv
 
 
 # Load 100 puzzles

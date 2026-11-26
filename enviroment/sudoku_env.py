@@ -6,7 +6,6 @@ from gymnasium import spaces
 from algorithms.csp import SudokuCSP
 from strategies.mrv import MRVStrategy
 
-
 class SudokuEnv(gym.Env):
 
     def __init__(self, puzzles, solutions, max_steps=100):
