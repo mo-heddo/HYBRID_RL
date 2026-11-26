@@ -2,7 +2,8 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 import numpy as np
 import pandas as pd
@@ -11,12 +12,14 @@ from enviroment.dqn_only_env import DQNOnlySudokuEnv
 from algorithms.dqn_agent import DQNAgent
 
 
-# Load 1000 unseen puzzles
-df = pd.read_csv(
-    "dataset/sudoku.csv",
-    skiprows=range(1, 101),
-    nrows=1000
-)
+# ==============================
+# Load the SAME 100 test puzzles
+# ==============================
+
+DATA_PATH = ROOT / "dataset" / "test_curriculum.csv"
+MODEL_PATH = ROOT / "models" / "sudoku_dqn_only.pth"
+
+df = pd.read_csv(DATA_PATH)
 
 puzzles = np.array([
     np.array(list(map(int, p))).reshape(9, 9)
@@ -29,7 +32,10 @@ solutions = np.array([
 ])
 
 
-# Create DQN-only environment
+# ==============================
+# Create environment
+# ==============================
+
 env = DQNOnlySudokuEnv(
     puzzles=puzzles,
     solutions=solutions,
@@ -37,26 +43,28 @@ env = DQNOnlySudokuEnv(
 )
 
 
-# Load DQN-only model
+# ==============================
+# Load trained DQN-only model
+# ==============================
+
 agent = DQNAgent(
     state_size=81,
     action_size=729
 )
 
-agent.load("models/sudoku_dqn_only.pth")
+agent.load(MODEL_PATH)
 agent.epsilon = 0.0
 
 
+# ==============================
 # Evaluation
-solved_count = 0
-total_cell_accuracy = 0
-total_reward = 0
+# ==============================
 
-episodes = len(puzzles)
+results = []
 
-for episode in range(episodes):
+for episode in range(len(puzzles)):
 
-    # Test each puzzle exactly once
+    # Select exactly one test puzzle
     env.puzzles = puzzles[episode:episode + 1]
     env.solutions = solutions[episode:episode + 1]
 
@@ -76,12 +84,15 @@ for episode in range(episodes):
             info["action_mask"]
         )
 
-        observation, reward, terminated, truncated, info = env.step(action)
+        observation, reward, terminated, truncated, info = (
+            env.step(action)
+        )
 
         episode_reward += reward
 
-    final_board = env.board
+    final_board = env.board.copy()
 
+    # Count only cells that were originally empty
     empty_positions = initial_board == 0
     total_empty = np.sum(empty_positions)
 
@@ -89,32 +100,100 @@ for episode in range(episodes):
         (final_board == solution) & empty_positions
     )
 
-    cell_accuracy = correct_cells / total_empty
+    accuracy = (
+        correct_cells / total_empty * 100
+        if total_empty > 0 else 100.0
+    )
 
     solved = np.array_equal(final_board, solution)
 
-    if solved:
-        solved_count += 1
+    level = df.iloc[episode]["level"]
 
-    total_cell_accuracy += cell_accuracy
-    total_reward += episode_reward
+    results.append({
+        "level": level,
+        "solved": int(solved),
+        "accuracy": accuracy,
+        "correct_cells": correct_cells,
+        "total_empty": total_empty,
+        "reward": episode_reward
+    })
 
-    if (episode + 1) % 100 == 0:
+    if (episode + 1) % 10 == 0:
+        recent = results[-10:]
+
         print(
-            f"Episode: {episode + 1}/{episodes} | "
-            f"Solved: {solved_count} | "
-            f"Cell Accuracy: "
-            f"{total_cell_accuracy / (episode + 1) * 100:.2f}%"
+            f"Episode: {episode + 1}/{len(puzzles)} | "
+            f"Solved: {sum(r['solved'] for r in results)} | "
+            f"Recent Accuracy: "
+            f"{np.mean([r['accuracy'] for r in recent]):.2f}%"
         )
 
 
-print("\n====== DQN ONLY EVALUATION ======")
-print(f"Total puzzles: {episodes}")
-print(f"Solved puzzles: {solved_count}")
-print(f"Solve Rate: {solved_count / episodes * 100:.2f}%")
+# ==============================
+# Overall results
+# ==============================
+
+results_df = pd.DataFrame(results)
+
+print("\n========== DQN-ONLY EVALUATION ==========")
+
+print("Total puzzles:", len(results_df))
+
+print("Solved puzzles:", results_df["solved"].sum())
+
 print(
-    f"Average Cell Accuracy: "
-    f"{total_cell_accuracy / episodes * 100:.2f}%"
+    "Solve Rate:",
+    f"{results_df['solved'].mean() * 100:.2f}%"
 )
-print(f"Average Reward: {total_reward / episodes:.2f}")
-print("================================")
+
+print(
+    "Average Cell Accuracy:",
+    f"{results_df['accuracy'].mean():.2f}%"
+)
+
+print(
+    "Average Reward:",
+    f"{results_df['reward'].mean():.2f}"
+)
+
+
+# ==============================
+# Results per difficulty level
+# ==============================
+
+print("\n========== RESULTS PER LEVEL ==========")
+
+for level, group in results_df.groupby("level", sort=False):
+
+    print(f"\nLevel {level}")
+
+    print(
+        "Solved:",
+        f"{group['solved'].sum()}/{len(group)}"
+    )
+
+    print(
+        "Solve Rate:",
+        f"{group['solved'].mean() * 100:.2f}%"
+    )
+
+    print(
+        "Cell Accuracy:",
+        f"{group['accuracy'].mean():.2f}%"
+    )
+
+    print(
+        "Average Reward:",
+        f"{group['reward'].mean():.2f}"
+    )
+
+
+# ==============================
+# Save results
+# ==============================
+
+OUTPUT_PATH = ROOT / "evaluation" / "dqn_only_results.csv"
+
+results_df.to_csv(OUTPUT_PATH, index=False)
+
+print("\nResults saved to:", OUTPUT_PATH)
