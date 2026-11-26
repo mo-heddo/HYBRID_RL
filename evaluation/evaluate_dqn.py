@@ -15,7 +15,7 @@ from algorithms.dqn_agent import DQNAgent
 df = pd.read_csv(
     "dataset/sudoku.csv",
     skiprows=range(1, 101),
-    nrows=100
+    nrows=1000
 )
 
 puzzles = np.array([
@@ -27,6 +27,16 @@ solutions = np.array([
     np.array(list(map(int, s))).reshape(9, 9)
     for s in df["solutions"]
 ])
+
+training_df = pd.read_csv("dataset/sudoku.csv", nrows=100)
+
+training_puzzles = set(training_df["quizzes"])
+evaluation_puzzles = set(df["quizzes"])
+
+overlap = training_puzzles.intersection(evaluation_puzzles)
+
+print("Duplicate puzzles:", len(overlap))
+
 
 
 # 2. Create the evaluation environment
@@ -71,16 +81,21 @@ def encode_state(board, current_cell):
 
 
 # 5. Evaluation
-episodes = 100
+episodes = 1000
 
 solved_count = 0
 total_cell_accuracy = 0
 total_reward = 0
 
 for episode in range(episodes):
+    
+
+    # Force evaluation to use this exact puzzle
+    env.puzzles = puzzles[episode:episode + 1]
+    env.solutions = solutions[episode:episode + 1]
 
     observation, info = env.reset()
-
+   
     initial_board = observation.copy()
     solution = env.solution.copy()
 
